@@ -33,9 +33,41 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
 
-    //DccDecoder.ProcessPackets();   
+  Serial.print(" 0=");
+  Serial.print(DccDecoder.GetOutputState(0));
+  Serial.print(" 1=");
+  Serial.print(DccDecoder.GetOutputState(1));
+  Serial.print(" 2=");
+  Serial.print(DccDecoder.GetOutputState(2));
+  Serial.print(" ");
+  Serial.print(DccDecoder.GetOutputState(3));
+  Serial.print(" ");
+  Serial.print(DccDecoder.GetOutputState(4));
+  Serial.print(" ");
+  Serial.print(DccDecoder.GetOutputState(5));
+  Serial.print(" ");
+  Serial.print(DccDecoder.GetOutputState(6));
+  Serial.print(" ");
+  Serial.print(DccDecoder.GetOutputState(7));
+  Serial.print(" 8=");
+  Serial.print(DccDecoder.GetOutputState(8));
+  Serial.print(" 9=");
+  Serial.print(DccDecoder.GetOutputState(9));
+  Serial.print(" 10=");
+  Serial.print(DccDecoder.GetOutputState(10));
+  Serial.print(" 11=");
+  Serial.print(DccDecoder.GetOutputState(11));
+  Serial.print(" 12=");
+  Serial.print(DccDecoder.GetOutputState(12));
+  Serial.print(" 13=");
+  Serial.print(DccDecoder.GetOutputState(13));
+  Serial.print(" 14=");
+  Serial.print(DccDecoder.GetOutputState(14));
+  Serial.print(" 15=");
+  Serial.println(DccDecoder.GetOutputState(15));
+  
 
-    if(Direction!=DccDecoder.GetDirection()){
+    /*if(Direction!=DccDecoder.GetDirection()){
       Direction=DccDecoder.GetDirection();
       Serial.print("Direction ");
       Serial.println(Direction);      
@@ -55,7 +87,7 @@ void loop() {
         Serial.println(" is on");
       }
     }
-
+*/
 
 };
 

@@ -6,8 +6,13 @@
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 volatile byte DHDCC_CV1;
+volatile byte DHDCC_CV3;
+volatile byte DHDCC_CV4;
+volatile byte DHDCC_CV5;
+volatile byte DHDCC_CV6;
 volatile byte DHDCC_CV7;
 volatile byte DHDCC_CV8;
+volatile byte DHDCC_CV9;
 volatile byte DHDCC_CV17;
 volatile byte DHDCC_CV18;
 volatile byte DHDCC_CV29;
@@ -61,18 +66,15 @@ byte GlobalDirection;    // direction 0/1 (0 - reverse,1 - forward)
 unsigned int GlobalFn1;   // function states FL(FL0),F1,F2,F3 - F15
 unsigned int GlobalFn2;   // funstion states F16-F28
 
+// Output state
+unsigned int GlobalOutput1;
+
 // Configuration Variable Access Instruction - Long Form
 unsigned int CVAI_LAST_DHDCC_ADDRESS;
 byte CVAI_LAST_DATA;
 bool CVAI_UPDATE;
 
-// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-// DCC Packet stack 
-// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-DCCPacketStack PacketStack;
-
+DCCPacket PacketStack;
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // class for holding DCC packet
@@ -108,49 +110,11 @@ byte DCCPacket::GetData(byte Position){
   return Data[Position];
 };
 
-// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-// class for holding DCC packets stack
-// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-DCCPacketStack::DCCPacketStack(void){
-  StoredPackets=0;
-  LastStoredPacketPosition=1;
-};
-
-bool DCCPacketStack::PushPacket(DCCPacket * InPacket){
-  /*if(LastStoredPacketPosition<10){
-    LastStoredPacketPosition++;
-    Packets[LastStoredPacketPosition-1]=*InPacket;
-    return true;
-  }  
-  return false;
-  */
-  Packets[0]=*InPacket;
-  return true;
-};
-
-bool DCCPacketStack::PopPacket(DCCPacket * OutPacket){
-
-  /*if(OutPacket!=NULL && LastStoredPacketPosition>1){
-    //Serial.print("lp=");
-    //Serial.println(LastStoredPacketPosition-1,DEC);
-    *OutPacket=Packets[0];
-    
-    for(byte a=0;a<LastStoredPacketPosition-1;a++){
-      Packets[a]=Packets[a+1];
-    }
-    LastStoredPacketPosition--;
-    return true;
+void DCCPacket::Clear(){
+  for(byte i=0;i<DHDCC_MaxPacketLength;i++){
+      Data[i]=0;
   }
-  return false;*/
-  *OutPacket=Packets[0];
-  return true;
-};
-
-void DCCPacketStack::Clear(void){
-  StoredPackets=0;
-  LastStoredPacketPosition=1;
-};
-
+}
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Main library class 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -172,7 +136,7 @@ bool DHDCC_GlobalFN(byte InFN){
    return false;  
 };
 
-// decorator 
+// decorator for 
 bool DHDCC::GetFnState(byte InFN){
 
     return DHDCC_GlobalFN(InFN);
@@ -207,6 +171,38 @@ byte DHDCC::GetDirection(){
     return GlobalDirection;
 };
 
+bool DHDCC_GlobalOutput(byte InOutput){
+
+    if(InOutput<16){
+        if(bitRead(GlobalOutput1,InOutput)==1){
+          return true;
+        }
+        return false;
+    }
+   return false;  
+};
+
+// decorator for 
+bool DHDCC::GetOutputState(byte InOutput){
+
+    return DHDCC_GlobalOutput(InOutput);
+
+};
+
+bool DHDCC_GlobalOutputSet(byte InOutput, byte InState){
+
+    if(InOutput<16){
+        if(InState){
+          bitSet(GlobalOutput1,InOutput);
+        }else{
+          bitClear(GlobalOutput1,InOutput);
+        }
+        return true;
+    }
+   return false;  
+};
+
+
 void DHDCC::DecoderSetup(byte InPin){
 
    pinMode(InPin, INPUT_PULLUP);  // DCC signal input pin 2
@@ -216,12 +212,17 @@ void DHDCC::DecoderSetup(byte InPin){
 // CV Setup
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
   
-  DHDCC_CV1=EEPROM.read(1); // read stored values from eeprom
+  DHDCC_CV1=0;//EEPROM.read(1); // read stored values from eeprom
+  DHDCC_CV3=EEPROM.read(3);
+  DHDCC_CV4=EEPROM.read(4);
+  DHDCC_CV5=EEPROM.read(5);
+  DHDCC_CV6=EEPROM.read(6);
   DHDCC_CV7=EEPROM.read(7); // 
   DHDCC_CV8=EEPROM.read(8); // 
+  DHDCC_CV9=0;//EEPROM.read(9); // 
   DHDCC_CV17=EEPROM.read(17); // 
   DHDCC_CV18=EEPROM.read(18); // 
-  DHDCC_CV29=EEPROM.read(29); // 
+  DHDCC_CV29=128;//EEPROM.read(29); // 
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Service mode setup
@@ -271,15 +272,11 @@ CVAI_UPDATE=false;
 
 };
 
-
-
 void DHDCC_ProcessPackets(void){
-
-  DCCPacket TPacket;
-
-
   
-  if(PacketStack.PopPacket(&TPacket)){
+  DCCPacket TPacket=PacketStack;
+  if(0==0){
+    
     // filter adress partition
     // DHDCC_ADDress 
     // 00000000 (0): Broadcast DHDCC_ADDress
@@ -289,12 +286,50 @@ void DHDCC_ProcessPackets(void){
     // DHDCC_ADDresses 11101000-11111110 (232-254)(inclusive): Reserved for Future Use
     // DHDCC_ADDress 11111111 (255): DHDCC_Idle Packet
 
-    if(TPacket.GetDHDCC_ADDress()==0){
-      // broadcast
+    if(TPacket.GetDHDCC_ADDress()==0 || TPacket.GetDHDCC_ADDress()==255){
+      // broadcast or idle packet
+      switch (TPacket.GetDHDCC_ADDress()){
+        case 0:
+          // test for reset packet;
+          if((TPacket.GetData(0)+TPacket.GetData(1)+TPacket.GetData(2))==0){
+            // process Digital Decoder Reset Packet For All Decoders
+              GlobalSpeed=0;
+              GlobalDirection=0;
+              GlobalFn1=0;
+              GlobalFn2=0;
+              CVAI_LAST_DHDCC_ADDRESS=0;
+              CVAI_LAST_DATA=0;
+              CVAI_UPDATE=false;           
+          }else
+            // test for Digital Decoder Broadcast Stop Packets For All Decoders
+            if(TPacket.GetData(0)==0 && TPacket.GetData(1)==TPacket.GetData(2)){
+              //process Digital Decoder Broadcast Stop Packets For All Decoders
+              if((TPacket.GetData(1) & 1)==0){
+                GlobalSpeed=0; // normal stop
+              }
+              if((TPacket.GetData(1) & 1)==1){
+                GlobalSpeed=1; // emergency stop
+              }
+              // bits four and five ignored for now.
+            }          
+        break;
+        case 255:
+          // test for Digital Decoder Idle Packet For All Decoders
+          if(TPacket.GetData(0)==255 && TPacket.GetData(1)==0 && TPacket.GetData(2)==255){
+            //process Digital Decoder Idle Packet For All Decoders
+            // e.g. do nothing :)
+          }
+        break;       
+      }
+
+
+      
     }
 
-    if(TPacket.GetDHDCC_ADDress()!=255 && TPacket.GetDHDCC_ADDress()!=0){
-/*      Serial.print(TPacket.GetDHDCC_ADDress(),BIN);
+    
+
+/*    if(TPacket.GetDHDCC_ADDress()!=255 && TPacket.GetDHDCC_ADDress()!=0){
+      Serial.print(TPacket.GetDHDCC_ADDress(),BIN);
       Serial.print(" ");
       Serial.print(TPacket.GetData(0),BIN);
       Serial.print(" ");
@@ -303,9 +338,11 @@ void DHDCC_ProcessPackets(void){
       Serial.print(TPacket.GetData(2),BIN);
       Serial.print(" ");
       Serial.println(TPacket.GetData(3),BIN);
-  */    
+  
       
     }
+    */    
+    
 //
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Multi Function Digital Decoders
@@ -600,24 +637,80 @@ if(  (  (TPacket.GetDHDCC_ADDress()>>5)==3 ) && (  (TPacket.GetDHDCC_ADDress()&6
 // Accessory Digital Decoder Packet Formats    
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 #ifdef DHDCC_ADD
-
-    
-    
+   
     // Basic Accessory Decoder Packet Format
-    if(((TPacket.GetData(1)>>6)&2)==2 && ((TPacket.GetData(2)>>7)==1)){
-/*    Serial.println("basic");  
-    Serial.print(TPacket.GetData(0),BIN);
-    Serial.print(" ");
-    Serial.print(TPacket.GetData(1),BIN);
-    Serial.print(" ");
-    Serial.print(TPacket.GetData(2),BIN);
-    Serial.print(" ");
-    Serial.println(TPacket.GetData(3),BIN);
-  */  
+    if(bitRead(DHDCC_CV29,5)==0){
+  
+    
+      // decoder address
+      // detect address depend on adressing mode selected by bit 6 in CV29
+      if(bitRead(DHDCC_CV29,6)==0){
+        //Decoder Address method  
+        //LSB CV1 / CV513   6 bits
+        //MSB CV9 / CV521   3 bits
+       
+        unsigned int ReceivedAddress=(TPacket.GetData(0)&63)
+                        | ((~TPacket.GetData(1) & 112) << 2);
+
+        unsigned int MyBaseAddress=(DHDCC_CV9 << 6) | (DHDCC_CV1);
+
+        bool ProcessFlag=false;
+        byte Offset=0;
+        for(byte i=0;i<DHDCC_ADD_ADRESSES;i++){
+           if(MyBaseAddress+i==ReceivedAddress){
+              ProcessFlag=true;
+              Offset=i;
+              break;
+           }
+        }        
+
+        
+
+        if(ProcessFlag){
+//          Serial.println("basic");  
+  //  Serial.print(TPacket.GetData(0),BIN);
+  //  Serial.print(" ");
+  //  Serial.println(TPacket.GetData(1),BIN);
+    //Serial.print(" ");
+    //Serial.println(TPacket.GetData(2),BIN);
+    //Serial.print(" ");
+    //Serial.println(TPacket.GetData(3),BIN);
+
+          
+          //process packet  
+          //get output from pair (0 - first output, 1 - second);
+          byte OutputNum=(TPacket.GetData(1)&1);
+
+    //      Serial.print("OutputNum=");
+      //    Serial.println(OutputNum);
+          
+          // get pair num (0-3)
+          byte PairNum=((TPacket.GetData(1)&6)>>1);
+     //     Serial.print("PairNum=");
+      //    Serial.println(PairNum);
+          bool ActivateDeactivate=((TPacket.GetData(1)&8)>>3);
+        //  Serial.print("AD=");
+         // Serial.println(ActivateDeactivate);
+
+          //set ouptut state. Output number is calculated as PairNum*2+OutputNum
+          //Serial.print(Offset);
+          //Serial.print(" ");
+          //Serial.println(8*Offset+(PairNum*2+OutputNum));
+          DHDCC_GlobalOutputSet(8*Offset+(PairNum*2+OutputNum),ActivateDeactivate);
+         
+        }
+      }else{
+        //Output Address method       
+        // which of pair
+        
+        
+      }
+  
+  
     }else
     
     // Extended Accessory Decoder Control Packet Format
-    if(((TPacket.GetData(1)>>6)&2)==2 && (TPacket.GetData(2)>>7)==0){
+    if(bitRead(DHDCC_CV29,5)==1){
 /*    Serial.println("extended");  
     Serial.print(TPacket.GetData(0),BIN);
     Serial.print(" ");
@@ -662,6 +755,19 @@ if(DHDCC_ServiceMode && DHDCC_LastPacketReset){
               Serial.print(TDHDCC_ADDress+1,DEC);
               Serial.print("=");
               Serial.println(DHDCC_CV1,DEC);
+            }
+            delay(300);
+            PacketStack.Clear();
+            DHDCC_ServiceMode=false;
+          break;        
+          case 9:
+            DHDCC_CV9=TPacket.GetData(2);
+            if(TempCV!=DHDCC_CV9){              
+              EEPROM.write(TDHDCC_ADDress,DHDCC_CV9);
+              Serial.print("CV");
+              Serial.print(TDHDCC_ADDress+1,DEC);
+              Serial.print("=");
+              Serial.println(DHDCC_CV9,DEC);
             }
             delay(300);
             PacketStack.Clear();
@@ -834,7 +940,7 @@ void DCC_ISR(){
               for (byte a=0;a<DHDCC_DatabytesCounter;a++){
                 TPacket.PushData(&DHDCC_TempPacket[a]);
               }
-              PacketStack.PushPacket(&TPacket);
+              PacketStack=TPacket;
               DHDCC_ProcessPackets();
             }
           }          
@@ -890,28 +996,3 @@ void print_binary(int v, int num_places)
         }
     }
 }*/
-
-
-   /*
-    #ifdef MF7BIT
-    else if(TPacket.GetDHDCC_ADDress()>=1 && TPacket.GetDHDCC_ADDress()<=127){
-      // Multi-Function decoders with 7 bit DHDCC_ADDresses
-    }
-    #endif
-    #ifdef BA9BIT
-    else if(TPacket.GetDHDCC_ADDress()>=128 && TPacket.GetDHDCC_ADDress()<=191){
-      // Basic accessory decoders (9bit DHDCC_ADDress) && extended accesory decoders with 11-bit DHDCC_ADDress
-    }
-    #endif
-    #ifdef MF14BIT
-    else if(TPacket.GetDHDCC_ADDress()>=192 && TPacket.GetDHDCC_ADDress()<=231){
-      // Multi function decoder 14 bit DHDCC_ADDress
-    }
-    #endif    
-    else if(TPacket.GetDHDCC_ADDress()==255){
-      // DHDCC_Idle Packet
-    }
-
-*/
-
-
