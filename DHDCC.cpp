@@ -212,7 +212,7 @@ void DHDCC::DecoderSetup(byte InPin){
 // CV Setup
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
   
-  DHDCC_CV1=0;//EEPROM.read(1); // read stored values from eeprom
+  DHDCC_CV1=EEPROM.read(1); // read stored values from eeprom
   DHDCC_CV3=EEPROM.read(3);
   DHDCC_CV4=EEPROM.read(4);
   DHDCC_CV5=EEPROM.read(5);
