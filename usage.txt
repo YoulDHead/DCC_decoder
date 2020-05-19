@@ -1,6 +1,6 @@
 #Usage
 
-To switch loco or accessory please use defines in DHDCC.h file
+To switch decoder type use defines in DHDCC.h
 
 // Multi Function Digital Decoder
 // #define DHDCC_MFDD
