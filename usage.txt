@@ -1,2 +1,12 @@
 #Usage
 
+To switch loco or accessory please use defines in DHDCC.h file
+
+// Multi Function Digital Decoder
+// #define DHDCC_MFDD
+
+// Accessory Digital Decoder
+// #define DHDCC_ADD
+
+Uncomment #define DHDCC_MFDD if you need locomotive decoder
+Uncomment #define DHDCC_ADD if you need accessory decoder
